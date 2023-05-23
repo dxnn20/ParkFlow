@@ -1,14 +1,4 @@
 
-// #include <Servo.h>
-
-// int pos = 0;
-
-// Servo servo;
-
-// void setup() {
-//   
-// }
-
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <string.h>
@@ -16,19 +6,25 @@
 
 #define TRIGPIN_OUT_1 3
 #define ECHOPIN_OUT_1 4
-#define TRIGPIN_OUT_2 5 // PROBLEMATIC
-#define ECHOPIN_OUT_2 6 //  PB
+#define TRIGPIN_OUT_2 5 
+#define ECHOPIN_OUT_2 6 
 #define TRIGPIN_IN_1 9
 #define ECHOPIN_IN_1 10
 #define TRIGPIN_IN_2 11
 #define ECHOPIN_IN_2 12
+
 #define SERVO 8
 #define MAX_SPACE_AVAILABLE 10
+
 
 LiquidCrystal_I2C lcd(0x27,20,4);
 Servo servo;
 int curr_available = 5;
-int counter_test = 0;
+int counter = 0;
+int period = 1000;
+bool car = false;
+unsigned long curr_time;
+
 
 void setup() {
   Serial.begin(9600);
@@ -38,6 +34,7 @@ void setup() {
   lcd.init();
   lcd.clear();         
   lcd.backlight();
+  lcd.print("Available:");
 
   pinMode(TRIGPIN_IN_1, OUTPUT);
   pinMode(ECHOPIN_IN_1, INPUT);
@@ -56,60 +53,44 @@ void setup() {
 void loop() {
   int dist_test = 0;
 
+  servo.write(0);
+  lcd.setCursor(0,1);
 
-  lcd.setCursor(0,0);
-
-  lcd.print("Available:");
+  lcd.setCursor(strlen("Available:"),0);
+  lcd.print("  ");
   lcd.setCursor(strlen("Available:"),0);
 
-  lcd.print(curr_available);
-  lcd.setCursor(0,1);
+  //lcd.print(counter);
 
-  delay(10);
-  lcd.setCursor(0,1);
-  lcd.print("Sensor ");
-  lcd.print(TRIGPIN_OUT_2);
-  lcd.print(",");
-  lcd.print( ECHOPIN_OUT_2 );
-  lcd.print(":");
-  
-  dist_test = getSensorDistance(TRIGPIN_OUT_2, ECHOPIN_OUT_2);
-  lcd.print(dist_test);
-  lcd.print("  ");
-  
+  //lcd.print(curr_available);
 
-  if(dist_test <=15 )
-    counter_test++;
-  else 
-    counter_test = 0;
+//checking car at the entrance
+car = checkCar(TRIGPIN_IN_1,ECHOPIN_IN_1);
 
-lcd.print(counter_test);
+//testing purposes
+if(car == true)
+  lcd.print(1);
+else 
+  lcd.print(0);
 
-  if(counter_test == 3){
+// if car == true => car is at the entrance
+// check number and everything
 
-    for(int i = 0; i< 90; i++){
-      delay(10);
-      servo.write(i);
-    }
-    counter_test = 0;
-    
+//if statement for testing after confirming the plate number
+if(car == true)
+  raiseBar();
 
-    while(dist_test <=15){
-      dist_test = getSensorDistance(TRIGPIN_OUT_2, ECHOPIN_OUT_2);
-      delay(350);
-
-    }
-    for(int i = 90; i>= 0; i--){
-      delay(10);
-      servo.write(i);
-    }
-  }
-  
-  Serial.print(dist_test);
+//check if car entered
+while(checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == false ){
   delay(1000);
   
-  lcd.clear();
+  if(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) == false)
+    break;
+}
 
+closeBar();
+
+delay(1000);
 }
 
 unsigned short getSensorDistance(int trigPin, int echoPin) {
@@ -122,10 +103,45 @@ unsigned short getSensorDistance(int trigPin, int echoPin) {
 
   digitalWrite(trigPin, LOW);
   long duration = pulseIn(echoPin, HIGH);
+
   return ((duration / 2) / 29.1);
 
 }
 
+bool checkCar(int trigPin1, int echoPin1){
+  counter = 0;
+
+for(int i = 0 ; i < 5; i++){
+  delay(10);
+
+  if(getSensorDistance(trigPin1,echoPin1) < 20)
+    counter++;
+  else 
+   counter = 0;
+
+  delay(10);
+}
+
+if( counter >= 3)
+  return true;
+else 
+  return false;
+}
+
+void raiseBar(){
+  for(int i = 0; i< 90; i++){
+    delay(10);
+    servo.write(i);
+    }
+}
+void closeBar(){
+    for(int i = 90; i>= 0; i--){
+      delay(10);
+      servo.write(i);
+    }
+}
 //bar logic:
 // - a few scans before it runs the camera check
 // -  if distance <= 15 run scan
+
+//replace delay: 

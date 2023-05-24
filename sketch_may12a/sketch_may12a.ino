@@ -3,7 +3,9 @@
 #include <LiquidCrystal_I2C.h>
 #include <string.h>
 #include <Servo.h>
+#include <TimeLib.h>
 
+// sensor pins
 #define TRIGPIN_OUT_1 3
 #define ECHOPIN_OUT_1 4
 #define TRIGPIN_OUT_2 5 
@@ -13,18 +15,21 @@
 #define TRIGPIN_IN_2 11
 #define ECHOPIN_IN_2 12
 
+//servo pin
 #define SERVO 8
+
+//placeholder for how many places we have free
 #define MAX_SPACE_AVAILABLE 10
 
-
+// Variables
 LiquidCrystal_I2C lcd(0x27,20,4);
 Servo servo;
+
 int curr_available = 5;
 int counter = 0;
 int period = 1000;
 bool car = false;
 unsigned long curr_time;
-
 
 void setup() {
   Serial.begin(9600);
@@ -73,22 +78,40 @@ if(car == true)
 else 
   lcd.print(0);
 
+  lcd.setCursor(0,2);
+  lcd.print("sensor in   ");
+  lcd.print(checkCar(TRIGPIN_IN_1,ECHOPIN_IN_1));
+
 // if car == true => car is at the entrance
 // check number and everything
 
 //if statement for testing after confirming the plate number
-if(car == true)
+if(car == true && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == false){
   raiseBar();
+  time_t start = now();
 
 //check if car entered
-while(checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == false ){
-  delay(1000);
+  while(checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == false || checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) == true){
+    delay(1000);
+    Serial.print(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1));
+    Serial.print("  ");
+    Serial.print(checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2));
+    Serial.print("  ");
   
-  if(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) == false)
-    break;
-}
+    time_t end = now();
+    Serial.print(end - start);
+    Serial.print("\n");
 
-closeBar();
+    while(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) == true && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == true)
+      delay(1000);
+
+   if((checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) == false && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == true ) || ((end - start) >= 20)){
+      delay(100);
+      closeBar();
+      break;
+    }
+  }
+}
 
 delay(1000);
 }
@@ -114,7 +137,7 @@ bool checkCar(int trigPin1, int echoPin1){
 for(int i = 0 ; i < 5; i++){
   delay(10);
 
-  if(getSensorDistance(trigPin1,echoPin1) < 20)
+  if(getSensorDistance(trigPin1,echoPin1) < 30)
     counter++;
   else 
    counter = 0;
@@ -136,7 +159,7 @@ void raiseBar(){
 }
 void closeBar(){
     for(int i = 90; i>= 0; i--){
-      delay(10);
+      delay(12);
       servo.write(i);
     }
 }

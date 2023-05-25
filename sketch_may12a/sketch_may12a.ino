@@ -63,56 +63,31 @@ void setup() {
 }
 
 void loop() {
-  int dist_test = 0;
-
+  //starting values coresponding to the idle ones
   lcdTextInactive();
-
   servo.write(0);
 
-  //lcd.print(counter);
-
-  //lcd.print(curr_available);
-
 //checking car at the entrance
+// if car == true => car is at the entrance, else , no car
 car = checkCar(TRIGPIN_IN_1,ECHOPIN_IN_1);
 
 //testing purposes
-
 // if car == true => car is at the entrance
 // check number and everything
 
-//if statement for testing after confirming the plate number
-if(car == true && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == false){
-  raiseBar();
-  time_t start = now();
+//this if statement is temporary to test the function
+if(car == true && checkCar(TRIGPIN_IN_2,  ECHOPIN_IN_2) == false)
+  carEnter(car, TRIGPIN_IN_1, ECHOPIN_IN_1, TRIGPIN_IN_2, ECHOPIN_IN_2);
 
-//check if car entered
-  while(checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == false || checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) == true){
+//checking if any car wants to leave
+car = checkCar(TRIGPIN_OUT_1,ECHOPIN_OUT_1);
 
-    lcdTextActive();
-    delay(500);
-    Serial.print(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1));
-    Serial.print("  ");
-    Serial.print(checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2));
-    Serial.print("  ");
-  
-    time_t end = now();
-    Serial.print(end - start);
-    Serial.print("\n");
-
-    while(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) == true && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == true)
-      delay(1000);
-
-   if((checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) == false && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == true ) || ((end - start) >= 20)){
-      delay(100);
-      closeBar();
-      break;
-    }
-  }
-}
+//no need for verification or anything so car can freely leave, the illusion of free will, they MUST leave
+if(car == true && checkCar(TRIGPIN_OUT_2, ECHOPIN_IN_2) == false)
+  carEnter(car,TRIGPIN_IN_1,ECHOPIN_IN_1,TRIGPIN_IN_2,ECHOPIN_IN_2);
 
 lcdTextInactive();
-delay(800);
+delay(300);
 }
 
 unsigned short getSensorDistance(int trigPin, int echoPin) {
@@ -150,12 +125,46 @@ else
   return false;
 }
 
+//this function raises the bar if called then checks if the car has successfully gone through
+void carEnter(bool car, int trig_pin1 ,int echo_pin1, int trig_pin2,int echo_pin2){
+
+  //if statement for testing after confirming the plate number
+  raiseBar();
+  time_t start = now();
+
+//check if car entered
+  while(checkCar(trig_pin2,  echo_pin2) == false || checkCar(trig_pin1, echo_pin1) == true){
+
+    //testing purposes
+    lcdTextActive();
+    delay(500);
+    Serial.print(checkCar(trig_pin1, echo_pin1));
+    Serial.print("  ");
+    Serial.print(checkCar(trig_pin2,  echo_pin2));
+    Serial.print("  ");
+  
+    time_t end = now();
+    Serial.print(end - start);
+    Serial.print("\n");
+
+    while(checkCar(trig_pin1, echo_pin1) == true && checkCar(trig_pin2,  echo_pin2) == true)
+      delay(1000);
+
+   if((checkCar(trig_pin1, echo_pin1) == false && checkCar(trig_pin2,  echo_pin2) == true ) || ((end - start) >= 20)){
+      delay(100);
+      closeBar();
+      break;
+    }
+  }
+}
+
 void raiseBar(){
   for(int i = 0; i< 90; i++){
     delay(10);
     servo.write(i);
     }
 }
+
 void closeBar(){
     for(int i = 90; i>= 0; i--){
       delay(12);
@@ -168,8 +177,7 @@ void closeBar(){
 void lcdTextInactive()
 {
   lcd.setCursor(0,3);
-  lcd.print("                    ");// clear first line on display
-  //delay 
+  lcd.print("                    "); // clear last line on display
   
   //text appears from the left
   nameShiftingOnLcd();
@@ -185,7 +193,7 @@ void lcdTextActive()
 {
   lcd.clear();    
   lcd.setCursor(0,0);
-  lcd.print("Statut:");
+  lcd.print("Status:");
   // ...
 
   lcd.setCursor(0,1);
@@ -194,7 +202,6 @@ void lcdTextActive()
   lcd.print(curr_available);
 
   nameShiftingOnLcd();
-  //delay(20);
 }
 
 void nameShiftingOnLcd()
@@ -204,7 +211,7 @@ void nameShiftingOnLcd()
   {
   for(int i = j; i <= 7; i++)
   {
-    
+
     new_name[index_new_name] = name[i];
     index_new_name++;
   }
@@ -240,7 +247,6 @@ void nameShiftingOnLcd()
       
       cursor_position++;
     }
-    
   }
   delay(200);
 }

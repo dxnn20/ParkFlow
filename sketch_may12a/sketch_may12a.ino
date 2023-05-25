@@ -25,6 +25,13 @@
 LiquidCrystal_I2C lcd(0x27,20,4);
 Servo servo;
 
+char new_name[8];
+char name[] = "ParkFlow";
+short int cursor_position = 0;
+short int j = 7;
+short int index_out_range = 6;
+short index_new_name = 0;
+
 int curr_available = 5;
 int counter = 0;
 int period = 1000;
@@ -58,12 +65,9 @@ void setup() {
 void loop() {
   int dist_test = 0;
 
-  servo.write(0);
-  lcd.setCursor(0,1);
+  lcdTextInactive();
 
-  lcd.setCursor(strlen("Available:"),0);
-  lcd.print("  ");
-  lcd.setCursor(strlen("Available:"),0);
+  servo.write(0);
 
   //lcd.print(counter);
 
@@ -73,14 +77,6 @@ void loop() {
 car = checkCar(TRIGPIN_IN_1,ECHOPIN_IN_1);
 
 //testing purposes
-if(car == true)
-  lcd.print(1);
-else 
-  lcd.print(0);
-
-  lcd.setCursor(0,2);
-  lcd.print("sensor in   ");
-  lcd.print(checkCar(TRIGPIN_IN_1,ECHOPIN_IN_1));
 
 // if car == true => car is at the entrance
 // check number and everything
@@ -92,7 +88,9 @@ if(car == true && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == false){
 
 //check if car entered
   while(checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == false || checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) == true){
-    delay(1000);
+
+    lcdTextActive();
+    delay(500);
     Serial.print(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1));
     Serial.print("  ");
     Serial.print(checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2));
@@ -113,7 +111,8 @@ if(car == true && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) == false){
   }
 }
 
-delay(1000);
+lcdTextInactive();
+delay(800);
 }
 
 unsigned short getSensorDistance(int trigPin, int echoPin) {
@@ -163,8 +162,86 @@ void closeBar(){
       servo.write(i);
     }
 }
-//bar logic:
-// - a few scans before it runs the camera check
-// -  if distance <= 15 run scan
 
-//replace delay: 
+//SECTION DEDICATED FOR SHIFTING TEXT
+
+void lcdTextInactive()
+{
+  lcd.setCursor(0,3);
+  lcd.print("                    ");// clear first line on display
+  //delay 
+  
+  //text appears from the left
+  nameShiftingOnLcd();
+
+  lcd.setCursor(0,1);
+
+  lcd.print("Available:");
+  lcd.setCursor(strlen("Available:"),1);
+  lcd.print(curr_available);
+}
+
+void lcdTextActive()
+{
+  lcd.clear();    
+  lcd.setCursor(0,0);
+  lcd.print("Statut:");
+  // ...
+
+  lcd.setCursor(0,1);
+  lcd.print("Available:");
+  lcd.setCursor(strlen("Available:"),1);
+  lcd.print(curr_available);
+
+  nameShiftingOnLcd();
+  //delay(20);
+}
+
+void nameShiftingOnLcd()
+{
+  lcd.setCursor(cursor_position,3);
+  if(j > 0)
+  {
+  for(int i = j; i <= 7; i++)
+  {
+    
+    new_name[index_new_name] = name[i];
+    index_new_name++;
+  }
+  new_name[index_new_name] = '\0';
+  lcd.print(new_name);
+  index_new_name = 0;
+  j--;
+  }
+  else
+  {
+    // Text out of range
+    if(cursor_position >= 13)
+    {
+      for(int i = 0; i <= index_out_range; i++)
+      {
+        new_name[i] = name[i];
+      }
+      new_name[index_out_range + 1] = '\0';
+      lcd.print(new_name);
+      
+      index_out_range--;
+      cursor_position++;
+      if(cursor_position == 21)
+      {
+        cursor_position = 0;
+        j = 7;
+        index_out_range = 6;
+      }
+    }
+    else
+    {
+      lcd.print(name);
+      
+      cursor_position++;
+    }
+    
+  }
+  delay(200);
+}
+

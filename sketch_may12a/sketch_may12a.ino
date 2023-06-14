@@ -18,9 +18,6 @@
 #define SERVO_IN 8
 #define SERVO_OUT 7
 
-//placeholder for how many places we have free
-#define MAX_SPACE_AVAILABLE 10
-
 enum ParkingState {
   Idle,
   CarEnter,
@@ -34,17 +31,30 @@ LiquidCrystal_I2C lcd(0x27,20,4);
 Servo servo_in;
 Servo servo_out;
 
-char new_name[8];
-char name[] = "ParkFlow";
-short int cursor_position = 0;
-short int j = 7;
-short int index_out_range = 6;
-short index_new_name = 0;
-bool bar_in = false, bar_out = false;
+byte occupied[] = {
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111
+};
 
-int curr_available = 5;
-int counter = 0;
-int period_in = 0,period_out = 0;
+byte empty[] = {
+  B11111,
+  B10001,
+  B10001,
+  B10001,
+  B10001,
+  B10001,
+  B10001,
+  B11111
+};
+
+int period_in = 0,period_out = 0, curr_available = 1;
+bool bar_in = false, bar_out = false;
 
 void setup() {
   Serial.begin(9600);
@@ -59,7 +69,10 @@ void setup() {
   lcd.init();
   lcd.clear();         
   lcd.backlight();
+  lcd.setCursor(7 - strlen("Available:")/2, 3);
   lcd.print("Available:");
+  lcd.createChar(0, occupied);
+  lcd.createChar(1, empty);
 
   pinMode(TRIGPIN_IN_1, OUTPUT);
   pinMode(ECHOPIN_IN_1, INPUT);
@@ -73,6 +86,8 @@ void setup() {
   pinMode(TRIGPIN_OUT_2, OUTPUT);
   pinMode(ECHOPIN_OUT_2, INPUT);
 
+  lcd.write(0);
+
 }
 
 void loop() {
@@ -85,21 +100,44 @@ Serial.print("  ");
 
 switch(state_in){
   case Idle:
-    if(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1))
+  printParking(20 - curr_available);
+
+  if ( curr_available == 0)
+    break;
+    
+    if(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1)){
       state_in = CarEnter;
+      lcd.clear();
+      Serial.write('s');
+    }
   break;
 
   case CarEnter:
-    if(bar_in == false){
+    if(bar_in == false){ //&& Serial.read() == 'v'){
       bar_in = raiseBar(servo_in,bar_in);
+      textValid();
       break;
     }
+    // else {
+    //   textInvalid();
+    //   state_in = Idle;
+    //   break;
+    // }
 
-    if((checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) && !checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1)) || (period_in == 25 && !(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2)))){
+    if( /* bar_in == true && */ ((checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) && !checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1)) || (period_in == 25 && !(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2))))){
       bar_in = closeBar(servo_in,bar_in);
+      curr_available--;
       period_in = 0;
       state_in = Idle;
+      lcd.clear();
+      lcd.setCursor(6,1);
+      lcd.print("ParkFlow");
+
     }
+
+    if( bar_in == false && period_in == 25)
+      state_in = Idle;
+
     period_in++ ;
   break;
 
@@ -125,6 +163,7 @@ switch(state_out){
     }
     if((checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2) && !checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1)) || (period_out == 25 && !(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1) && checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2)))){
       bar_out = closeBar(servo_out,bar_out);
+      curr_available++;
       period_out = 0;
       state_out = Idle;
     }
@@ -132,8 +171,6 @@ switch(state_out){
 
   break;
 }
-
-delay(10);
 }
 
 unsigned short getSensorDistance(int trigPin, int echoPin) {
@@ -152,10 +189,10 @@ unsigned short getSensorDistance(int trigPin, int echoPin) {
 }
 
 bool checkCar(int trigPin1, int echoPin1){
-  counter = 0;
+  int counter = 0;  
 
 for(int i = 0 ; i < 5; i++){
-  delay(10);
+  delay(1);
 
   if(getSensorDistance(trigPin1,echoPin1) < 30)
     counter++;
@@ -174,7 +211,7 @@ else
 //this function raises the bar if called then checks if the car has successfully gone through
 
 bool raiseBar(Servo servo, bool bar){
-  for(int i = 0; i< 90; i++){
+  for(int i = 0; i< 90; i += 3){
     delay(10);
     servo.write(i);
     }
@@ -183,7 +220,7 @@ bool raiseBar(Servo servo, bool bar){
 }
 
 bool closeBar(Servo servo,bool bar){
-    for(int i = 90; i>= 0; i--){
+    for(int i = 90; i>= 0; i -= 3){
       delay(12);
       servo.write(i);
     }
@@ -193,82 +230,47 @@ bool closeBar(Servo servo,bool bar){
 
 //SECTION DEDICATED FOR SHIFTING TEXT
 
-void lcdTextInactive()
-{
-  lcd.setCursor(0,3);
-  lcd.print("                    "); // clear last line on display
-  
-  //text appears from the left
-  nameShiftingOnLcd();
 
-  lcd.setCursor(0,1);
+bool textValid(){
+      lcd.clear();
+      lcd.setCursor(6,1);
+      lcd.print("Welcome!");
 
-  lcd.print("Available:");
-  lcd.setCursor(strlen("Available:"),1);
-  lcd.print(curr_available);
-  
+      return true;
 }
 
-void lcdTextActive()
-{
-  lcd.clear();    
-  lcd.setCursor(0,0);
-  lcd.print("Status:");
-  // ...
+bool textInvalid(){
+      lcd.clear();
+      lcd.setCursor(6,1);
+      lcd.print("Invalid");
 
-  lcd.setCursor(0,1);
-  lcd.print("Available:");
-  lcd.setCursor(strlen("Available:"),1);
-  lcd.print(curr_available);
+      return false;
+}
 
-  nameShiftingOnLcd();
+void printParking(int n ){
+  int printed = 0;
+
   lcd.clear();
-}
+  lcd.setCursor(2,1);
+  lcd.print("ParkFlow");
 
-void nameShiftingOnLcd()
-{
-  lcd.setCursor(cursor_position,3);
-  if(j > 0)
-  {
-  for(int i = j; i <= 7; i++)
-  {
+  lcd.setCursor(7 - strlen("Available:")/2, 3);
+  lcd.print("Available:");
+  lcd.print(curr_available);
 
-    new_name[index_new_name] = name[i];
-    index_new_name++;
-  }
-  new_name[index_new_name] = '\0';
-  lcd.print(new_name);
-  index_new_name = 0;
-  j--;
-  }
-  else
-  {
-    // Text out of range
-    if(cursor_position >= 13)
-    {
-      for(int i = 0; i <= index_out_range; i++)
-      {
-        new_name[i] = name[i];
+  for(int i = 0 ; i < 4 ;i++ )
+    for(int j = 15 ; j< 20; j++ ){
+      lcd.setCursor(j,i);
+      if( printed < n){
+        lcd.write(0);
+        printed++;
       }
-      new_name[index_out_range + 1] = '\0';
-      lcd.print(new_name);
-      
-      index_out_range--;
-      cursor_position++;
-      if(cursor_position == 21)
-      {
-        cursor_position = 0;
-        j = 7;
-        index_out_range = 6;
-      }
+      else 
+      lcd.write(1);
     }
-    else
-    {
-      lcd.print(name);
-      
-      cursor_position++;
-    }
-  }
-  delay(200);
-}
 
+    if( n == 20){
+      lcd.setCursor(9,0);
+      lcd.print("FULL->");
+      }
+}

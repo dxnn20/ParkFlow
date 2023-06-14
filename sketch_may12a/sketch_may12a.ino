@@ -1,4 +1,3 @@
-
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <string.h>
@@ -16,14 +15,24 @@
 #define ECHOPIN_IN_2 12
 
 //servo pin
-#define SERVO 8
+#define SERVO_IN 8
+#define SERVO_OUT 7
 
 //placeholder for how many places we have free
 #define MAX_SPACE_AVAILABLE 10
 
+enum ParkingState {
+  Idle,
+  CarEnter,
+  CarExit
+};
+
 // Variables
+
+ParkingState state_in = 0, state_out = 0;
 LiquidCrystal_I2C lcd(0x27,20,4);
-Servo servo;
+Servo servo_in;
+Servo servo_out;
 
 char new_name[8];
 char name[] = "ParkFlow";
@@ -31,17 +40,21 @@ short int cursor_position = 0;
 short int j = 7;
 short int index_out_range = 6;
 short index_new_name = 0;
+bool bar_in = false, bar_out = false;
 
 int curr_available = 5;
 int counter = 0;
-int period = 1000;
-bool car = false;
-unsigned long curr_time;
+int period_in = 0,period_out = 0;
 
 void setup() {
   Serial.begin(9600);
-  servo.attach(SERVO);
-  servo.write(0);
+  servo_in.attach(SERVO_IN);
+  servo_in.write(0);
+  servo_out.attach(SERVO_OUT);
+  servo_out.write(0);
+
+  bar_in = false;
+  bar_out = false;
 
   lcd.init();
   lcd.clear();         
@@ -63,31 +76,64 @@ void setup() {
 }
 
 void loop() {
-  //starting values coresponding to the idle ones
-  lcdTextInactive();
-  servo.write(0);
 
-//checking car at the entrance
-// if car == true => car is at the entrance, else , no car
-car = checkCar(TRIGPIN_IN_1,ECHOPIN_IN_1);
+Serial.print("States: ");
+Serial.print(state_in);
+Serial.print("   ");
+Serial.print(state_out);
+Serial.print("  ");
 
-//testing purposes
-// if car == true => car is at the entrance
-// check number and everything
+switch(state_in){
+  case Idle:
+    if(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1))
+      state_in = CarEnter;
+  break;
 
-//this if statement is temporary to test the function
-if(car == true && checkCar(TRIGPIN_IN_2,  ECHOPIN_IN_2) == false)
-  carEnter(car, TRIGPIN_IN_1, ECHOPIN_IN_1, TRIGPIN_IN_2, ECHOPIN_IN_2);
+  case CarEnter:
+    if(bar_in == false){
+      bar_in = raiseBar(servo_in,bar_in);
+      break;
+    }
 
-//checking if any car wants to leave
-car = checkCar(TRIGPIN_OUT_1,ECHOPIN_OUT_1);
+    if((checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) && !checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1)) || (period_in == 25 && !(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2)))){
+      bar_in = closeBar(servo_in,bar_in);
+      period_in = 0;
+      state_in = Idle;
+    }
+    period_in++ ;
+  break;
 
-//no need for verification or anything so car can freely leave, the illusion of free will, they MUST leave
-if(car == true && checkCar(TRIGPIN_OUT_2, ECHOPIN_IN_2) == false)
-  carEnter(car,TRIGPIN_IN_1,ECHOPIN_IN_1,TRIGPIN_IN_2,ECHOPIN_IN_2);
+}
 
-lcdTextInactive();
-delay(300);
+Serial.print("Sensor exit: ");
+Serial.print(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1));
+Serial.print("   ");
+Serial.print(checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2));
+Serial.print("\n");
+
+switch(state_out){
+
+  case Idle:
+    if(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1))
+      state_out = CarExit;
+  break;
+  
+  case CarExit: 
+  if(!bar_out){
+      bar_out = raiseBar(servo_out,bar_out);
+      break;
+    }
+    if((checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2) && !checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1)) || (period_out == 25 && !(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1) && checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2)))){
+      bar_out = closeBar(servo_out,bar_out);
+      period_out = 0;
+      state_out = Idle;
+    }
+    period_out++;
+
+  break;
+}
+
+delay(10);
 }
 
 unsigned short getSensorDistance(int trigPin, int echoPin) {
@@ -126,50 +172,23 @@ else
 }
 
 //this function raises the bar if called then checks if the car has successfully gone through
-void carEnter(bool car, int trig_pin1 ,int echo_pin1, int trig_pin2,int echo_pin2){
 
-  //if statement for testing after confirming the plate number
-  raiseBar();
-  time_t start = now();
-
-//check if car entered
-  while(checkCar(trig_pin2,  echo_pin2) == false || checkCar(trig_pin1, echo_pin1) == true){
-
-    //testing purposes
-    lcdTextActive();
-    delay(500);
-    Serial.print(checkCar(trig_pin1, echo_pin1));
-    Serial.print("  ");
-    Serial.print(checkCar(trig_pin2,  echo_pin2));
-    Serial.print("  ");
-  
-    time_t end = now();
-    Serial.print(end - start);
-    Serial.print("\n");
-
-    while(checkCar(trig_pin1, echo_pin1) == true && checkCar(trig_pin2,  echo_pin2) == true)
-      delay(1000);
-
-   if((checkCar(trig_pin1, echo_pin1) == false && checkCar(trig_pin2,  echo_pin2) == true ) || ((end - start) >= 20)){
-      delay(100);
-      closeBar();
-      break;
-    }
-  }
-}
-
-void raiseBar(){
+bool raiseBar(Servo servo, bool bar){
   for(int i = 0; i< 90; i++){
     delay(10);
     servo.write(i);
     }
+
+  return true;
 }
 
-void closeBar(){
+bool closeBar(Servo servo,bool bar){
     for(int i = 90; i>= 0; i--){
       delay(12);
       servo.write(i);
     }
+
+    return false;
 }
 
 //SECTION DEDICATED FOR SHIFTING TEXT
@@ -187,6 +206,7 @@ void lcdTextInactive()
   lcd.print("Available:");
   lcd.setCursor(strlen("Available:"),1);
   lcd.print(curr_available);
+  
 }
 
 void lcdTextActive()
@@ -202,6 +222,7 @@ void lcdTextActive()
   lcd.print(curr_available);
 
   nameShiftingOnLcd();
+  lcd.clear();
 }
 
 void nameShiftingOnLcd()

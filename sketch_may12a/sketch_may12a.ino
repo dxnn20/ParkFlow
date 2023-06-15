@@ -113,18 +113,18 @@ switch(state_in){
   break;
 
   case CarEnter:
-    if(bar_in == false){ //&& Serial.read() == 'v'){
+    if(bar_in == false  && Serial.read() == 'v'){
       bar_in = raiseBar(servo_in,bar_in);
       textValid();
       break;
     }
-    // else {
-    //   textInvalid();
-    //   state_in = Idle;
-    //   break;
-    // }
+    else {
+      textInvalid();
+      state_in = Idle;
+      break;
+    }
 
-    if( /* bar_in == true && */ ((checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) && !checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1)) || (period_in == 25 && !(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2))))){
+    if( bar_in == true &&  ((checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) && !checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1)))){
       bar_in = closeBar(servo_in,bar_in);
       curr_available--;
       period_in = 0;
@@ -133,6 +133,14 @@ switch(state_in){
       lcd.setCursor(6,1);
       lcd.print("ParkFlow");
 
+    }
+    else if(bar_in == true && ( period_in == 25 && !(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2)))){
+      bar_in = closeBar(servo_in,bar_in);
+      period_in = 0;
+      state_in = Idle;
+      lcd.clear();
+      lcd.setCursor(6,1);
+      lcd.print("ParkFlow");
     }
 
     if( bar_in == false && period_in == 25)
@@ -170,16 +178,18 @@ switch(state_out){
     period_out++;
 
   break;
-}
+  }
+
 }
 
+//function that returns the distance between a sensor and the closes object to it
 unsigned short getSensorDistance(int trigPin, int echoPin) {
 
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
 
   digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
+  delayMicroseconds(5);
 
   digitalWrite(trigPin, LOW);
   long duration = pulseIn(echoPin, HIGH);
@@ -188,18 +198,18 @@ unsigned short getSensorDistance(int trigPin, int echoPin) {
 
 }
 
+//this function executes 5 scans and if 3 consecutive ones return a positive result then a car is stationary at the entrance / exit
 bool checkCar(int trigPin1, int echoPin1){
   int counter = 0;  
 
 for(int i = 0 ; i < 5; i++){
-  delay(1);
 
   if(getSensorDistance(trigPin1,echoPin1) < 30)
     counter++;
   else 
    counter = 0;
 
-  delay(10);
+  delay(2);
 }
 
 if( counter >= 3)
@@ -208,11 +218,9 @@ else
   return false;
 }
 
-//this function raises the bar if called then checks if the car has successfully gone through
-
 bool raiseBar(Servo servo, bool bar){
-  for(int i = 0; i< 90; i += 3){
-    delay(10);
+  for(int i = 0; i< 90; i += 2){
+    delay(8);
     servo.write(i);
     }
 
@@ -220,31 +228,28 @@ bool raiseBar(Servo servo, bool bar){
 }
 
 bool closeBar(Servo servo,bool bar){
-    for(int i = 90; i>= 0; i -= 3){
-      delay(12);
-      servo.write(i);
-    }
+  for(int i = 90; i>= 0; i -= 2){
+    delay(8);
+    servo.write(i);
+  }
 
     return false;
 }
 
-//SECTION DEDICATED FOR SHIFTING TEXT
-
-
 bool textValid(){
-      lcd.clear();
-      lcd.setCursor(6,1);
-      lcd.print("Welcome!");
+  lcd.clear();
+  lcd.setCursor(6,1);
+  lcd.print("Welcome!");
 
       return true;
 }
 
 bool textInvalid(){
-      lcd.clear();
-      lcd.setCursor(6,1);
-      lcd.print("Invalid");
+  lcd.clear();
+  lcd.setCursor(6,1);
+  lcd.print("Invalid");
 
-      return false;
+  return false;
 }
 
 void printParking(int n ){
@@ -259,7 +264,7 @@ void printParking(int n ){
   lcd.print(curr_available);
 
   for(int i = 0 ; i < 4 ;i++ )
-    for(int j = 15 ; j< 20; j++ ){
+    for(int j = 15 ; j < 20; j++ ){
       lcd.setCursor(j,i);
       if( printed < n){
         lcd.write(0);

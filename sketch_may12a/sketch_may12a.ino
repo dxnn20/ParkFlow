@@ -18,10 +18,13 @@
 #define SERVO_IN 8
 #define SERVO_OUT 7
 
+//max space & led
+#define MAX_LOTS 20
+#define LED 2
+
 enum ParkingState {
   Idle,
-  CarEnter,
-  CarExit
+  Active,
 };
 
 // Variables
@@ -30,6 +33,9 @@ ParkingState state_in = 0, state_out = 0;
 LiquidCrystal_I2C lcd(0x27,20,4);
 Servo servo_in;
 Servo servo_out;
+bool confirmed = false, presence = false;
+char received;
+int aux,aux2 = 0;
 
 byte occupied[] = {
   B11111,
@@ -53,11 +59,12 @@ byte empty[] = {
   B11111
 };
 
-int period_in = 0,period_out = 0, curr_available = 1;
+int period_in = 0,period_out = 0, curr_available = 20;
 bool bar_in = false, bar_out = false;
+bool session = false;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   servo_in.attach(SERVO_IN);
   servo_in.write(0);
   servo_out.attach(SERVO_OUT);
@@ -69,8 +76,7 @@ void setup() {
   lcd.init();
   lcd.clear();         
   lcd.backlight();
-  lcd.setCursor(7 - strlen("Available:")/2, 3);
-  lcd.print("Available:");
+  printParking(0);
   lcd.createChar(0, occupied);
   lcd.createChar(1, empty);
 
@@ -86,100 +92,140 @@ void setup() {
   pinMode(TRIGPIN_OUT_2, OUTPUT);
   pinMode(ECHOPIN_OUT_2, INPUT);
 
+  pinMode(LED, OUTPUT);
+
   lcd.write(0);
 
 }
 
 void loop() {
 
-Serial.print("States: ");
-Serial.print(state_in);
-Serial.print("   ");
-Serial.print(state_out);
-Serial.print("  ");
+// Serial.print("States: ");
+// Serial.print(state_in);
+// Serial.print("   ");
+// Serial.print(state_out);
+// Serial.print("  ");
 
 switch(state_in){
   case Idle:
-  printParking(20 - curr_available);
 
   if ( curr_available == 0)
     break;
-    
-    if(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1)){
-      state_in = CarEnter;
-      lcd.clear();
-      Serial.write('s');
-    }
+
+  if (!checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && presence == true){
+    presence = false;
+    printParking(20 - curr_available);
+  }
+
+  if(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1)&& presence == false && session == false){
+    state_in = Active;
+    Serial.write('s');
+    printProcessing();
+    presence = true;
+    session = true;
+  }
   break;
 
-  case CarEnter:
-    if(bar_in == false  && Serial.read() == 'v'){
+  case Active:
+
+  aux2 = Serial.read();
+
+    if(aux2 == 'v')
+      aux = 'v';
+    else if (aux2 == 'n')
+      aux = 'n';
+
+    if(bar_in == false  && (aux == 'v') && (session == true)){
       bar_in = raiseBar(servo_in,bar_in);
+      digitalWrite(LED, HIGH);
       textValid();
+      presence = true;
+      aux = 0;
       break;
     }
-    else {
+    else if (( aux == 110) && session == true){
       textInvalid();
+      aux = 0;
+      presence = true;
       state_in = Idle;
       break;
+
     }
 
     if( bar_in == true &&  ((checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2) && !checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1)))){
       bar_in = closeBar(servo_in,bar_in);
+      digitalWrite(LED, LOW);
       curr_available--;
       period_in = 0;
       state_in = Idle;
-      lcd.clear();
-      lcd.setCursor(6,1);
-      lcd.print("ParkFlow");
-
+      Serial.write('e');
+      presence = false;
+      session = false;
+      printParking(20 -  curr_available);
     }
-    else if(bar_in == true && ( period_in == 25 && !(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2)))){
+    else if(bar_in == true && ( period_in >= 100 && !(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2)))){
       bar_in = closeBar(servo_in,bar_in);
+      digitalWrite(LED, LOW);
       period_in = 0;
       state_in = Idle;
-      lcd.clear();
-      lcd.setCursor(6,1);
-      lcd.print("ParkFlow");
+      presence = false;
+      session = false;
+      printParking(20 - curr_available);
     }
 
-    if( bar_in == false && period_in == 25)
+    if( bar_in == false && period_in >= 100){
       state_in = Idle;
+      presence = false;
+      session = false;
+      period_in = 0;
+      aux = 0;
+    }
 
     period_in++ ;
   break;
 
 }
 
-Serial.print("Sensor exit: ");
-Serial.print(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1));
-Serial.print("   ");
-Serial.print(checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2));
-Serial.print("\n");
+// Serial.print("Sensor exit: ");
+// Serial.print(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1));
+// Serial.print("   ");
+// Serial.print(checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2));
+// Serial.print("Available:");
+// Serial.print(curr_available);
+// Serial.print("\n");
 
 switch(state_out){
 
   case Idle:
     if(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1))
-      state_out = CarExit;
+      state_out = Active;
   break;
   
-  case CarExit: 
+  case Active: 
   if(!bar_out){
       bar_out = raiseBar(servo_out,bar_out);
       break;
     }
-    if((checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2) && !checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1)) || (period_out == 25 && !(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1) && checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2)))){
+
+  if(bar_out == true && (checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2) && !checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1))){
       bar_out = closeBar(servo_out,bar_out);
-      curr_available++;
+
+      if( curr_available < MAX_LOTS)
+        curr_available++;
+
       period_out = 0;
       state_out = Idle;
+    }
+    else if(bar_out == true && (period_out >= 100 && !(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1) && checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2)))){
+      bar_out = closeBar(servo_out,bar_out);
+      period_out = 0;
+      state_out = Idle;
+      period_out = 0;
     }
     period_out++;
 
   break;
   }
-
 }
 
 //function that returns the distance between a sensor and the closes object to it
@@ -275,7 +321,19 @@ void printParking(int n ){
     }
 
     if( n == 20){
-      lcd.setCursor(9,0);
-      lcd.print("FULL->");
+      lcd.setCursor(16,2);
+      lcd.print("FULL");
       }
+}
+
+void printProcessing(){
+  char str[] = "Processing...";
+  int n = strlen(str);
+
+  lcd.clear();
+  lcd.setCursor(10 - strlen(str)/2, 1);
+  for(int i = 0; i < n; i++){
+    lcd.print(str[i]);
+    delay(10);
+  }
 }

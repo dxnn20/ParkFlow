@@ -100,12 +100,6 @@ void setup() {
 
 void loop() {
 
-// Serial.print("States: ");
-// Serial.print(state_in);
-// Serial.print("   ");
-// Serial.print(state_out);
-// Serial.print("  ");
-
 switch(state_in){
   case Idle:
 
@@ -136,8 +130,9 @@ switch(state_in){
       aux = 'n';
 
     if(bar_in == false  && (aux == 'v') && (session == true)){
-      bar_in = raiseBar(servo_in,bar_in);
       digitalWrite(LED, HIGH);
+      delay(50);
+      bar_in = raiseBar(servo_in,bar_in);
       textValid();
       presence = true;
       aux = 0;
@@ -163,7 +158,7 @@ switch(state_in){
       session = false;
       printParking(20 -  curr_available);
     }
-    else if(bar_in == true && ( period_in >= 100 && !(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2)))){
+    else if(bar_in == true && ( period_in >= 200 && !(checkCar(TRIGPIN_IN_1, ECHOPIN_IN_1) && checkCar(TRIGPIN_IN_2, ECHOPIN_IN_2)))){
       bar_in = closeBar(servo_in,bar_in);
       digitalWrite(LED, LOW);
       period_in = 0;
@@ -173,7 +168,8 @@ switch(state_in){
       printParking(20 - curr_available);
     }
 
-    if( bar_in == false && period_in >= 100){
+    if( bar_in == false && period_in >= 200){
+      printParking(20 - curr_available);
       state_in = Idle;
       presence = false;
       session = false;
@@ -186,17 +182,10 @@ switch(state_in){
 
 }
 
-// Serial.print("Sensor exit: ");
-// Serial.print(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1));
-// Serial.print("   ");
-// Serial.print(checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2));
-// Serial.print("Available:");
-// Serial.print(curr_available);
-// Serial.print("\n");
-
 switch(state_out){
 
   case Idle:
+
     if(checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1))
       state_out = Active;
   break;
@@ -208,6 +197,8 @@ switch(state_out){
     }
 
   if(bar_out == true && (checkCar(TRIGPIN_OUT_2, ECHOPIN_OUT_2) && !checkCar(TRIGPIN_OUT_1, ECHOPIN_OUT_1))){
+    delay(50);
+
       bar_out = closeBar(servo_out,bar_out);
 
       if( curr_available < MAX_LOTS)
@@ -255,7 +246,7 @@ for(int i = 0 ; i < 5; i++){
   else 
    counter = 0;
 
-  delay(2);
+  delay(10);
 }
 
 if( counter >= 3)
